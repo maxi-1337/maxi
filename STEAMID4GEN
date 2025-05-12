@@ -1,0 +1,87 @@
+import threading
+import time
+import random
+import string
+from urllib import request
+from queue import Queue
+
+# ANSI escape codes for colored output
+RED = '\033[91m'
+GREEN = '\033[92m'
+RESET = '\033[0m'
+
+BASE_URL = 'http://steamcommunity.com/id/'
+
+# Generate random 4-character string with optional "-" or "_"
+def generate_random_string():
+    chars = string.ascii_lowercase + string.digits
+    special_chars = ['-', '_']
+
+    if random.choice([True, False]):
+        # Append a special character at the end
+        return ''.join(random.choice(chars) for _ in range(3)) + random.choice(special_chars)
+    else:
+        # Mix special characters randomly
+        return ''.join(random.choice(chars + ''.join(special_chars)) for _ in range(4))
+
+# Queue setup
+id_queue = Queue()
+
+# Generate and shuffle 1000 random IDs
+id_list = [generate_random_string() for _ in range(1000)]
+random.shuffle(id_list)
+
+for steam_id in id_list:
+    id_queue.put(steam_id)
+
+# Check if the Steam profile exists
+def profile_exists(steam_id):
+    url = BASE_URL + steam_id
+    try:
+        req = request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+        response = request.urlopen(req, timeout=10)
+        html = response.read().decode('utf-8')
+
+        return 'The specified profile could not be found.' not in html
+    except Exception as e:
+        print(f"Error checking ID {steam_id}: {str(e)}")
+        return True  # Treat as taken if any error occurs
+
+# Worker thread function
+def worker(lock):
+    while not id_queue.empty():
+        steam_id = id_queue.get()
+
+        with lock:
+            print(f"Checking ID: {steam_id}")
+
+        if not profile_exists(steam_id):
+            with lock:
+                print(f'{GREEN}✅ Available: {steam_id}{RESET}')
+        else:
+            with lock:
+                print(f'{RED}ID {steam_id} is not available.{RESET}')
+
+        time.sleep(3)  # Slow down request rate
+        id_queue.task_done()
+
+# Main function to start threads
+def main():
+    lock = threading.Lock()
+    num_threads = 5
+    threads = []
+
+    print("Made by Maxi\n")
+
+    for _ in range(num_threads):
+        t = threading.Thread(target=worker, args=(lock,))
+        t.start()
+        threads.append(t)
+
+    for t in threads:
+        t.join()
+
+    print("\nMade by Maxi\n")
+
+if __name__ == '__main__':
+    main()
